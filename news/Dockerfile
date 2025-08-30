@@ -6,12 +6,12 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
 
 WORKDIR /app
 
-# Install dependencies (no pip self-upgrade)
+# Pin pip to a compatible version before any installs
+RUN python -m pip install --no-cache-dir --upgrade "pip<25.1"
+
 COPY requirements.txt .
 RUN python -m pip install --no-cache-dir -r requirements.txt
 
-# App code
 COPY app.py .
-
 CMD ["python", "-u", "app.py"]
 
