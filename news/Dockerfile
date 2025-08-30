@@ -23,3 +23,10 @@ COPY app.py ./app.py
 
 CMD ["python", "-u", "app.py"]
 
+
+# Fail the build if influxdb_client isn't in the image
+RUN python - <<'PY'
+import importlib.util
+assert importlib.util.find_spec("influxdb_client"), "influxdb_client missing"
+print("OK: influxdb_client present")
+PY
