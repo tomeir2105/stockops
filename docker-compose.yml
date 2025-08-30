@@ -7,7 +7,7 @@ services:
     ports:
       - "8086:8086"
     env_file:
-      - .env                       # <— secrets for init
+      - app.env                       # <— secrets for init
     environment:
       - DOCKER_INFLUXDB_INIT_MODE=setup
       - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_ADMIN_USER}
@@ -28,7 +28,7 @@ services:
     ports:
       - "3000:3000"
     env_file:
-      - .env                       # <— admin user/pass from secrets
+      - app.env                       # <— admin user/pass from secrets
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
@@ -40,29 +40,25 @@ services:
   fetcher:
     build: ./fetcher
     container_name: lse-fetcher
-    depends_on:
-      - influxdb
+    depends_on: [influxdb]
+    env_file:
+      - app.env                 # ← ensure INFLUX_* are present in the container
     environment:
       - INFLUX_URL=http://influxdb:8086
-      - INFLUX_TOKEN=${INFLUXDB_ADMIN_TOKEN}
-      - INFLUX_ORG=${INFLUXDB_ORG}
-      - INFLUX_BUCKET=${INFLUXDB_BUCKET}
     volumes:
-      - ./app.env:/app/.env:ro     # <— hot-reload config for fetcher
+      - ./app.env:/app/.env:ro  # ← hot-reload app settings (tickers, intervals, etc.)
     restart: unless-stopped
 
   news:
     build: ./news
     container_name: lse-news
-    depends_on:
-      - influxdb
+    depends_on: [influxdb]
+    env_file:
+      - app.env                 # ← ensure INFLUX_* are present in the container
     environment:
       - INFLUX_URL=http://influxdb:8086
-      - INFLUX_TOKEN=${INFLUXDB_ADMIN_TOKEN}
-      - INFLUX_ORG=${INFLUXDB_ORG}
-      - INFLUX_BUCKET=${INFLUXDB_BUCKET}
     volumes:
-      - ./app.env:/app/.env:ro     # <— hot-reload config for news
+      - ./app.env:/app/.env:ro
       - ./feeds.yaml:/app/feeds.yaml:ro
     restart: unless-stopped
 

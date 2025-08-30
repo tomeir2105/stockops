@@ -3,24 +3,25 @@
   "uid": "lse-basic",
   "title": "LSE Prices (Close)",
   "schemaVersion": 39,
-  "version": 4,
+  "version": 6,
   "time": { "from": "now-24h", "to": "now" },
-	"timezone": "utc",
-"annotations": {
-  "list": [
-    {
-			"name": "News",
-			"type": "dashboard",
-			"enable": true,
-			"hide": false,
-			"iconColor": "#33A02C",
-			"datasource": { "type": "influxdb", "uid": "influxdb-flux" },
-      "target": {
-        "query": "from(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"lse_news\")\n  |> filter(fn: (r) => r.ticker =~ /^${ticker:regex}$/)\n  |> pivot(rowKey: [\"_time\",\"ticker\",\"source\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> keep(columns: [\"_time\",\"title\"]) \n  |> map(fn:(r) => ({ time: r._time, text: string(v: r.title) }))\n  |> keep(columns: [\"time\",\"text\"])"
+  "timezone": "utc",
+
+  "annotations": {
+    "list": [
+      {
+        "name": "News",
+        "type": "dashboard",
+        "enable": true,
+        "hide": false,
+        "iconColor": "#33A02C",
+        "datasource": { "type": "influxdb", "uid": "influxdb-flux" },
+        "target": {
+          "query": "from(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"lse_news\")\n  |> filter(fn: (r) => r.ticker =~ /^${ticker:regex}$/)\n  |> pivot(rowKey: [\"_time\",\"ticker\",\"source\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> keep(columns: [\"_time\",\"title\"]) \n  |> map(fn:(r) => ({ time: r._time, text: string(v: r.title) }))\n  |> keep(columns: [\"time\",\"text\"])"
+        }
       }
-    }
-  ]
-},
+    ]
+  },
 
   "timepicker": {
     "refresh_intervals": ["3s", "5s", "10s", "1m", "5m"]
@@ -37,7 +38,9 @@
         "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: v.bucket, tag: \"ticker\")",
         "refresh": 2,
         "multi": true,
-        "includeAll": false
+        "includeAll": true,
+        "allValue": ".*",
+        "current": { "text": "All", "value": "$__all" }
       },
       {
         "name": "every",
