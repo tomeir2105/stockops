@@ -7,7 +7,7 @@ services:
     ports:
       - "8086:8086"
     env_file:
-      - .env
+      - .env                       # <— secrets for init
     environment:
       - DOCKER_INFLUXDB_INIT_MODE=setup
       - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_ADMIN_USER}
@@ -28,7 +28,7 @@ services:
     ports:
       - "3000:3000"
     env_file:
-      - .env
+      - .env                       # <— admin user/pass from secrets
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
@@ -42,15 +42,13 @@ services:
     container_name: lse-fetcher
     depends_on:
       - influxdb
-    # Do NOT use env_file here; we want .env to be hot-reloaded from the mounted file.
     environment:
       - INFLUX_URL=http://influxdb:8086
       - INFLUX_TOKEN=${INFLUXDB_ADMIN_TOKEN}
       - INFLUX_ORG=${INFLUXDB_ORG}
       - INFLUX_BUCKET=${INFLUXDB_BUCKET}
     volumes:
-      # Hot-reload settings (tickers, intervals, etc.) are read from this file at /app/.env
-      - ./.env:/app/.env:ro
+      - ./app.env:/app/.env:ro     # <— hot-reload config for fetcher
     restart: unless-stopped
 
   news:
@@ -58,14 +56,13 @@ services:
     container_name: lse-news
     depends_on:
       - influxdb
-    # No env_file; only stable Influx vars via environment:
     environment:
       - INFLUX_URL=http://influxdb:8086
       - INFLUX_TOKEN=${INFLUXDB_ADMIN_TOKEN}
       - INFLUX_ORG=${INFLUXDB_ORG}
       - INFLUX_BUCKET=${INFLUXDB_BUCKET}
     volumes:
-      - ./.env:/app/.env:ro       # hot-reload news settings (tickers, filters, lookback)
+      - ./app.env:/app/.env:ro     # <— hot-reload config for news
       - ./feeds.yaml:/app/feeds.yaml:ro
     restart: unless-stopped
 
