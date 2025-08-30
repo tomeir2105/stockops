@@ -1,0 +1,37 @@
+apiVersion: v1
+data:
+  BACKFILL_ON_START: "true"
+  BACKFILL_PERIOD: 5d
+  DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: devtoken-please-change-me
+  DOCKER_INFLUXDB_INIT_BUCKET: lse
+  DOCKER_INFLUXDB_INIT_MODE: setup
+  DOCKER_INFLUXDB_INIT_ORG: stocks
+  DOCKER_INFLUXDB_INIT_PASSWORD: admin12345
+  DOCKER_INFLUXDB_INIT_USERNAME: admin
+  FETCH_INTERVAL_SECONDS: "60"
+  GF_SECURITY_ADMIN_PASSWORD: admin
+  GF_SECURITY_ADMIN_USER: admin
+  GRAFANA_ADMIN_PASSWORD: admin
+  GRAFANA_ADMIN_USER: admin
+  INFLUX_BUCKET: lse
+  INFLUX_ORG: stocks
+  INFLUX_TOKEN: devtoken-please-change-me
+  INFLUXDB_ADMIN_PASSWORD: admin12345
+  INFLUXDB_ADMIN_TOKEN: devtoken-please-change-me
+  INFLUXDB_ADMIN_USER: admin
+  INFLUXDB_BUCKET: lse
+  INFLUXDB_ORG: stocks
+  NEWS_BACKFILL_DAYS: "30"
+  NEWS_BACKFILL_ON_START: "true"
+  NEWS_FILTER_REQUIRE_TICKER: "false"
+  NEWS_KEYWORDS: HSBC,Vodafone,BP,Apple,Microsoft,Alphabet
+  NEWS_LOOKBACK_HOURS: "24"
+  NEWS_POLL_SECONDS: "900"
+  TICKERS: VOD.L,HSBA.L,BP.L,AAPL,MSFT,GOOGL
+  YF_INTERVAL: 1m
+  YF_PERIOD: 5d
+kind: ConfigMap
+metadata:
+  labels:
+    io.kompose.service: fetcher-app-env
+  name: app-env
