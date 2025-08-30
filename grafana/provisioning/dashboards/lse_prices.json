@@ -1,0 +1,76 @@
+{
+  "id": null,
+  "uid": "lse-basic",
+  "title": "LSE Prices (Close)",
+  "schemaVersion": 39,
+  "version": 4,
+  "time": { "from": "now-24h", "to": "now" },
+	"timezone": "utc",
+"annotations": {
+  "list": [
+    {
+			"name": "News",
+			"type": "dashboard",
+			"enable": true,
+			"hide": false,
+			"iconColor": "#33A02C",
+			"datasource": { "type": "influxdb", "uid": "influxdb-flux" },
+      "target": {
+        "query": "from(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"lse_news\")\n  |> filter(fn: (r) => r.ticker =~ /^${ticker:regex}$/)\n  |> pivot(rowKey: [\"_time\",\"ticker\",\"source\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> keep(columns: [\"_time\",\"title\"]) \n  |> map(fn:(r) => ({ time: r._time, text: string(v: r.title) }))\n  |> keep(columns: [\"time\",\"text\"])"
+      }
+    }
+  ]
+},
+
+  "timepicker": {
+    "refresh_intervals": ["3s", "5s", "10s", "1m", "5m"]
+  },
+
+  "templating": {
+    "list": [
+      {
+        "name": "ticker",
+        "type": "query",
+        "label": "Ticker",
+        "datasource": { "type": "influxdb", "uid": "influxdb-flux" },
+        "definition": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: v.bucket, tag: \"ticker\")",
+        "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: v.bucket, tag: \"ticker\")",
+        "refresh": 2,
+        "multi": true,
+        "includeAll": false
+      },
+      {
+        "name": "every",
+        "type": "custom",
+        "label": "Resolution",
+        "query": "3s,5s,10s,1m,5m",
+        "current": { "text": "1m", "value": "1m" },
+        "options": [
+          { "text": "3s", "value": "3s", "selected": false },
+          { "text": "5s", "value": "5s", "selected": false },
+          { "text": "10s", "value": "10s", "selected": false },
+          { "text": "1m", "value": "1m", "selected": true },
+          { "text": "5m", "value": "5m", "selected": false }
+        ]
+      }
+    ]
+  },
+
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Close Price - ${ticker}",
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "influxdb-flux" },
+          "query": "from(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"lse_prices\")\n  |> filter(fn: (r) => r._field == \"close\")\n  |> filter(fn: (r) => r.ticker =~ /^${ticker:regex}$/)\n  |> aggregateWindow(every: duration(v: \"${every}\"), fn: mean, createEmpty: false)\n  |> yield(name: \"mean\")"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom" }
+      }
+    }
+  ]
+}
+

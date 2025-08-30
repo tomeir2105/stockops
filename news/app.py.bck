@@ -1,0 +1,219 @@
+import os, sys, time
+from typing import List, Dict
+from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse, quote_plus
+
+import feedparser
+import yaml
+from influxdb_client import InfluxDBClient, Point, WriteOptions
+from email.utils import parsedate_to_datetime  # parses RFC 2822 dates
+
+# ---- Settings / guards ----
+FUTURE_CLAMP = timedelta(minutes=5)  # clamp accidental future timestamps
+
+def get_env(name: str, default: str = "") -> str:
+    v = os.getenv(name, default)
+    return v if v is not None else default
+
+INFLUX_URL = get_env("INFLUX_URL", "http://influxdb:8086")
+INFLUX_TOKEN = get_env("INFLUX_TOKEN")
+INFLUX_ORG = get_env("INFLUX_ORG", "stocks")
+INFLUX_BUCKET = get_env("INFLUX_BUCKET", "lse")
+
+TICKERS = [t.strip() for t in get_env("TICKERS", "VOD.L,HSBA.L,BP.L").split(",") if t.strip()]
+
+# Backfill controls
+NEWS_BACKFILL_ON_START = get_env("NEWS_BACKFILL_ON_START", "true").lower() in ("1","true","yes","y")
+NEWS_BACKFILL_DAYS = int(get_env("NEWS_BACKFILL_DAYS", "30"))
+
+# Regular polling
+NEWS_POLL_SECONDS = int(get_env("NEWS_POLL_SECONDS", "900"))
+NEWS_LOOKBACK_HOURS = int(get_env("NEWS_LOOKBACK_HOURS", "24"))
+FEEDS_PATH = "/app/feeds.yaml"
+
+# Match controls:
+# If true, require the ticker symbol (e.g., "VOD.L") to appear in title+summary.
+REQUIRE_TICKER = get_env("NEWS_FILTER_REQUIRE_TICKER", "true").lower() == "true"
+# Optional extra keywords (comma-separated, global) checked against title+summary, case-insensitive.
+EXTRA_KEYWORDS = [kw.strip().lower() for kw in get_env("NEWS_KEYWORDS", "").split(",") if kw.strip()]
+
+# ---- Helpers ----
+def domain_from_url(u: str) -> str:
+    try:
+        return urlparse(u).netloc or ""
+    except Exception:
+        return ""
+
+def load_feeds_config(tickers: List[str]) -> Dict[str, List[str]]:
+    cfg: Dict[str, List[str]] = {}
+    if os.path.exists(FEEDS_PATH):
+        try:
+            with open(FEEDS_PATH, "r", encoding="utf-8") as f:
+                loaded = yaml.safe_load(f) or {}
+                if isinstance(loaded, dict):
+                    for k, v in loaded.items():
+                        if isinstance(v, list):
+                            cfg[str(k)] = [str(x) for x in v]
+        except Exception as e:
+            print(f"[news] failed to read feeds.yaml: {e}", file=sys.stderr)
+
+    # Defaults: Google News per ticker
+    for t in tickers:
+        if t not in cfg or not cfg[t]:
+            cfg[t] = [f"https://news.google.com/rss/search?q={quote_plus(t)}&hl=en-GB&gl=GB&ceid=GB:en"]
+    return cfg
+
+def parse_time(entry) -> datetime:
+    """
+    Return an aware UTC datetime for a feed entry.
+    Prefer string date fields; fall back to *_parsed; clamp future times.
+    """
+    # 1) Prefer string date fields (handles TZ offsets well)
+    for key in ("published", "updated", "dc:date", "date"):
+        s = entry.get(key)
+        if s:
+            try:
+                dt = parsedate_to_datetime(s)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                ts = dt.astimezone(timezone.utc)
+                break
+            except Exception:
+                pass
+    else:
+        # 2) Fallbacks to feedparser’s struct_time fields
+        if getattr(entry, "published_parsed", None):
+            ts = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
+        elif getattr(entry, "updated_parsed", None):
+            ts = datetime(*entry.updated_parsed[:6], tzinfo=timezone.utc)
+        else:
+            ts = datetime.now(timezone.utc)
+
+    # 3) Clamp any accidental future timestamps
+    now_utc = datetime.now(timezone.utc)
+    if ts > now_utc + FUTURE_CLAMP:
+        ts = now_utc
+    return ts
+
+def fetch_news_for_ticker(ticker: str, feeds: List[str], cutoff: datetime) -> List[dict]:
+    items = []
+    t_lc = ticker.lower()
+    for url in feeds:
+        try:
+            d = feedparser.parse(url)
+        except Exception as e:
+            print(f"[news] feed error {url}: {e}", file=sys.stderr)
+            continue
+
+        for e in d.get("entries", []):
+            title = (e.get("title") or "").strip()
+            # Quick-path content: RSS summary/description (no full page crawl)
+            summary = (e.get("summary") or e.get("description") or "").strip()
+            link = e.get("link") or ""
+            if not title or not link:
+                continue
+
+            ts = parse_time(e)
+            if ts < cutoff:
+                continue
+
+            # --- Matching: title + summary ---
+            text_lc = (title + " " + summary).lower()
+            want = True
+            if REQUIRE_TICKER:
+                want = t_lc in text_lc
+            # If EXTRA_KEYWORDS provided, allow match if any keyword hits (OR with ticker match)
+            if EXTRA_KEYWORDS:
+                want = want or any(kw in text_lc for kw in EXTRA_KEYWORDS)
+
+            if not want:
+                continue
+
+            # Source
+            source = ""
+            try:
+                src = e.get("source")
+                if isinstance(src, dict):
+                    source = (src.get("title") or "").strip()
+            except Exception:
+                pass
+            if not source:
+                source = domain_from_url(link)
+
+            # Limit summary length to keep Influx points small
+            summary_trim = summary[:800]
+
+            items.append({
+                "ticker": ticker,
+                "title": title,
+                "summary": summary_trim,
+                "url": link,
+                "source": source,
+                "time": ts
+            })
+    print(f"[news] matched {len(items)} items for {ticker} since {cutoff.isoformat()}")
+    return items
+
+def write_news(items: List[dict], client: InfluxDBClient, bucket: str, org: str):
+    if not items:
+        print("[influx] news: nothing new")
+        return
+    write_api = client.write_api(write_options=WriteOptions(batch_size=500, flush_interval=5_000, jitter_interval=1_000))
+    seen = set()
+    points = []
+    for it in items:
+        key = (it["ticker"], it["url"])
+        if key in seen:
+            continue
+        seen.add(key)
+        p = (
+            Point("lse_news")
+            .tag("ticker", it["ticker"])
+            .tag("source", it["source"] or "")
+            .field("title", it["title"])
+            .field("summary", it["summary"])   # store summary too
+            .field("url", it["url"])
+            .time(it["time"])
+        )
+        points.append(p)
+    try:
+        write_api.write(bucket=bucket, org=org, record=points)
+        print(f"[influx] wrote {len(points)} news points")
+    except Exception as e:
+        print(f"[influx] write news error: {e}", file=sys.stderr)
+
+def backfill_once(client: InfluxDBClient, tickers: List[str], feeds_cfg: Dict[str, List[str]]):
+    if not NEWS_BACKFILL_ON_START:
+        print("[backfill] disabled")
+        return
+    cutoff = datetime.now(timezone.utc) - timedelta(days=NEWS_BACKFILL_DAYS)
+    print(f"[backfill] start days={NEWS_BACKFILL_DAYS} (cutoff={cutoff.isoformat()})")
+    all_items = []
+    for t in tickers:
+        feeds = feeds_cfg.get(t, [])
+        all_items.extend(fetch_news_for_ticker(t, feeds, cutoff))
+    write_news(all_items, client, INFLUX_BUCKET, INFLUX_ORG)
+    print("[backfill] done")
+
+def main():
+    print(f"Starting news loop. InfluxDB: {INFLUX_URL}, org={INFLUX_ORG}, bucket={INFLUX_BUCKET}, tickers={TICKERS}")
+    feeds_cfg = load_feeds_config(TICKERS)
+    with InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG) as client:
+        # ONE-TIME BACKFILL
+        backfill_once(client, TICKERS, feeds_cfg)
+
+        # REGULAR POLL LOOP
+        while True:
+            try:
+                cutoff = datetime.now(timezone.utc) - timedelta(hours=NEWS_LOOKBACK_HOURS)
+                all_items = []
+                for t in TICKERS:
+                    feeds = feeds_cfg.get(t, [])
+                    all_items.extend(fetch_news_for_ticker(t, feeds, cutoff))
+                write_news(all_items, client, INFLUX_BUCKET, INFLUX_ORG)
+            except Exception as e:
+                print(f"[loop] news error: {e}", file=sys.stderr)
+            time.sleep(NEWS_POLL_SECONDS)
+
+if __name__ == "__main__":
+    main()

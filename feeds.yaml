@@ -1,0 +1,7 @@
+# Per-ticker RSS feeds (override defaults). You can add more sources per ticker.
+VOD.L:
+  - "https://news.google.com/rss/search?q=VOD.L&hl=en-GB&gl=GB&ceid=GB:en"
+HSBA.L:
+  - "https://news.google.com/rss/search?q=HSBA.L&hl=en-GB&gl=GB&ceid=GB:en"
+BP.L:
+  - "https://news.google.com/rss/search?q=BP.L&hl=en-GB&gl=GB&ceid=GB:en"
