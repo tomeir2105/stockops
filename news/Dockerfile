@@ -1,6 +1,5 @@
 FROM python:3.12-slim
 
-# Quieter, safer pip defaults inside containers
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -8,25 +7,18 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
 
 WORKDIR /app
 
-# Bootstrap a known-good pip (avoids resolvelib ImportError in slim images)
+# minimal tools to fetch get-pip
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
  && curl -sSLo /tmp/get-pip.py https://bootstrap.pypa.io/get-pip.py \
  && python /tmp/get-pip.py "pip==25.0.1" \
  && rm -rf /var/lib/apt/lists/* /tmp/get-pip.py
 
-# Install deps
+# deps
 COPY requirements.txt .
-RUN python -m pip install --no-cache-dir -r requirements.txt
+RUN python -m pip install --no-cache-dir -r requirements.txt \
+ && python -m pip install --no-cache-dir --force-reinstall influxdb-client==1.49.0 \
+ && python -c "import importlib.util as u; assert u.find_spec('influxdb_client'); print('OK: influxdb_client present')"
 
-# App
+# app
 COPY app.py ./app.py
-
-CMD ["python", "-u", "app.py"]
-
-
-# Fail the build if influxdb_client isn't in the image
-RUN python - <<'PY'
-import importlib.util
-assert importlib.util.find_spec("influxdb_client"), "influxdb_client missing"
-print("OK: influxdb_client present")
-PY
+CMD ["python","-u","app.py"]
