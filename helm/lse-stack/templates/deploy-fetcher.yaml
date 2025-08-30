@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "lse.fullname" . }}-fetcher
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
+spec:
+  replicas: {{ .Values.replicaCount.fetcher }}
+  selector:
+    matchLabels: { app: fetcher, release: {{ include "lse.fullname" . }} }
+  template:
+    metadata:
+      labels: { app: fetcher, release: {{ include "lse.fullname" . }} }
+    spec:
+      containers:
+        - name: fetcher
+          image: "{{ .Values.image.fetcher.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          envFrom:
+            - secretRef: { name: {{ include "lse.fullname" . }}-secrets }
+          volumeMounts:
+            - name: feeds
+              mountPath: /app/feeds.yaml
+              subPath: feeds.yaml
+          livenessProbe:
+            exec:
+              command: ["sh","-c","pgrep -f app.py >/dev/null"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            exec:
+              command: ["sh","-c","pgrep -f app.py >/dev/null"]
+            initialDelaySeconds: 10
+            periodSeconds: 15
+      volumes:
+        - name: feeds
+          configMap:
+            name: {{ include "lse.fullname" . }}-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "lse.fullname" . }}-fetcher
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
+spec:
+  selector: { app: fetcher, release: {{ include "lse.fullname" . }} }
+  ports:
+    - port: {{ .Values.service.fetcher.port }}
+      targetPort: {{ .Values.service.fetcher.port }}
+      protocol: TCP

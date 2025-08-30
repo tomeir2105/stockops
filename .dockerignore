@@ -1,0 +1,12 @@
+.git
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.swp
+*.DS_Store
+venv/
+.venv/
+dist/
+build/
+lse_backup.zip

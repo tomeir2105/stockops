@@ -1,0 +1,11 @@
+tickers:
+  - VOD.L
+  - HSBA.L
+  - BP.L
+  - AAPL
+  - MSFT
+  - GOOGL
+lookback_hours: 48
+poll_seconds: 900
+require_ticker: true
+extra_keywords: []

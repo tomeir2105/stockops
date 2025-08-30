@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "lse.fullname" . }}-config
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
+data:
+  feeds.yaml: |
+    tickers: {{ toYaml .Values.appConfig.tickers | nindent 6 }}
+    lookback_hours: {{ .Values.appConfig.lookback_hours }}
+    poll_seconds: {{ .Values.appConfig.poll_seconds }}
+    require_ticker: {{ .Values.appConfig.require_ticker }}
+    extra_keywords: {{ toYaml .Values.appConfig.extra_keywords | nindent 6 }}

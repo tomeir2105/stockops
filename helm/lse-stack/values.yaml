@@ -1,0 +1,72 @@
+namespace: lse
+
+image:
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+  fetcher:
+    repository: meir25/lse-fetcher
+  news:
+    repository: meir25/lse-news
+
+replicaCount:
+  fetcher: 1
+  news: 1
+
+resources:
+  fetcher: {}
+  news: {}
+
+influxdb2:
+  adminUser:
+    organization: stocks
+    bucket: lse
+    user: admin
+    password: admin12345
+    token: admin-token-please-change
+  persistence:
+    enabled: true
+    size: 8Gi
+
+grafana:
+  adminPassword: "grafana12345"
+  service:
+    type: NodePort
+    nodePort: 30080
+  persistence:
+    enabled: true
+    size: 5Gi
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: InfluxDB
+          type: influxdb
+          access: proxy
+          url: http://{{ .Release.Name }}-influxdb2
+          isDefault: true
+          jsonData:
+            version: Flux
+            organization: stocks
+            defaultBucket: lse
+            tlsSkipVerify: true
+          secureJsonData:
+            token: admin-token-please-change
+
+appConfig:
+  tickers: ["VOD.L", "HSBA.L", "BP.L", "AAPL", "MSFT", "GOOGL"]
+  lookback_hours: 48
+  poll_seconds: 900
+  require_ticker: true
+  extra_keywords: []
+
+service:
+  fetcher:
+    port: 8081
+  news:
+    port: 8082
+
+ingress:
+  enabled: false
+  className: ""
+  hosts: []
+  tls: []

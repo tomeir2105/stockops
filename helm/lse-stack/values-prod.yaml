@@ -1,0 +1,13 @@
+# Prod overrides
+replicaCount:
+  fetcher: 2
+  news: 2
+grafana:
+  service:
+    nodePort: 30080
+influxdb2:
+  adminUser:
+    password: prod-strong-change
+    token: prod-token-change
+appConfig:
+  poll_seconds: 900

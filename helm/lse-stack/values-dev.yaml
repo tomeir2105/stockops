@@ -1,0 +1,13 @@
+# Dev overrides
+image:
+  tag: "0.1.0"
+
+grafana:
+  service:
+    nodePort: 30081
+influxdb2:
+  adminUser:
+    password: dev-pass-change
+    token: dev-token-change
+appConfig:
+  poll_seconds: 300

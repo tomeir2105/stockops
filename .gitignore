@@ -1,60 +1,11 @@
-# OS / editors
-.DS_Store
-Thumbs.db
-*.swp
-*.swo
-*.orig
-*~
-
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-.venv/
 .env
+app.env
+*.token
+*.secret
 venv/
-env/
-.python-version
-.mypy_cache/
-.pytest_cache/
-.coverage
-coverage.xml
-htmlcov/
-
-# Secrets / local config
-.env
-.env.*
-!.env.example
-*.bak
-
-# Logs / data dumps
+.venv/
+__pycache__/
+dist/
+build/
 *.log
-logs/
-tmp/
-cache/
-data/
-exports/
-*.csv
-*.parquet
-*.xlsx
-*.sqlite*
-*.db
-
-# Docker / Compose volumes you bind locally
-influx-data/
-influx-config/
-grafana-data/
-
-# Grafana runtime (keep provisioned JSONs tracked)
-grafana/session/
-grafana/provisioning/alerting/
-
-# Influx backups / archives
-influx_backups/
-*.manifest
-*.tar
-*.zip
-
-# Tool caches
-news/.cache/
-fetcher/.cache/
+.DS_Store
